@@ -1,0 +1,49 @@
+### model
+model_name_or_path: /home/nlper_data/liyt/Qwen2-VL-7B-Instruct
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_target: all
+
+### dataset
+dataset: geoQA-scale # video: mllm_video_demo
+template: qwen2_vl
+# cutoff_len: 1024
+# max_samples: 1000
+overwrite_cache: true
+preprocessing_num_workers: 16
+
+### output
+output_dir: saves/qwen2_vl-7b/lora/geoqa-new-sft-iter4-scale
+logging_steps: 10
+# save_steps: 500
+max_length: 2048 
+save_strategy: "epoch"
+save_total_limit: 10
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 8
+learning_rate: 3.0e-5
+num_train_epochs: 3.0
+lr_scheduler_type: constant_with_warmup
+warmup_ratio: 0.1
+weight_decay: 0.05
+# lora_r: 64
+# lora_alpha: 16
+# lora_dropout: 0.05
+adam_beta1: 0.9
+adam_beta2: 0.98
+adam_epsilon: 1.0e-6
+bf16: true
+ddp_timeout: 180000000
+
+### eval
+val_size: 0.1
+per_device_eval_batch_size: 1
+eval_strategy: steps
+eval_steps: 500
