@@ -1,0 +1,5 @@
+data/geoqa_train_cot.json filter=lfs diff=lfs merge=lfs -text
+data/geoqa_train_sampling.json filter=lfs diff=lfs merge=lfs -text
+data/geoqa_test_base.json filter=lfs diff=lfs merge=lfs -text
+data/geoqa_test_cot.json filter=lfs diff=lfs merge=lfs -text
+data/geoqa_train_base.json filter=lfs diff=lfs merge=lfs -text
