@@ -113,6 +113,7 @@ def calculate_metrics(datas:list[dict]) -> dict:
         if judge_answer(model_pred, m3cot_choices, m3cot_answer):
             metric['correct'] += 1
 
+    metric['acc'] = metric['correct'] / metric['total']
     return metric
 
 def gen_data_split(origin_data, model_preds, by_type='domain') -> dict:
