@@ -595,14 +595,14 @@ if __name__ == '__main__':
 
     output_dir = f'data/{eval_pth}/self_{data_type}_data'
     iter_num = f'iter{cur_iter}'
-    cot_out_file = f"{expr_name}-{iter_num}_cot.json"
-    refine_out_file = f'{expr_name}-{iter_num}_refine.json'
-    select_out_file = f'{expr_name}-{iter_num}_select.json'
+    cot_out_file = f"{expr_name}-select-scaling-{iter_num}_cot.json"
+    refine_out_file = f'{expr_name}-select-scaling-{iter_num}_refine.json'
+    select_out_file = f'{expr_name}-select-scaling-{iter_num}_select.json'
     
     if data_type == 'train':
         # build n select data
         select_data, select_metric = gen_select_data_n(merge_datas=merge_datas, merge_correct=files_corrects, origin_data=origin_data, order_list=file_order, data_type=data_type,
-                                                        n_candidates=[i for i in range(2, args.max_select_num)])
+                                                        n_candidates=[i for i in range(2, args.max_select_num+1)])
         print('='*20)
         print('Generated Select data:')
         print(select_metric)

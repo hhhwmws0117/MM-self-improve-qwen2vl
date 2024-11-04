@@ -116,7 +116,7 @@ def do_train(iter_name:str,
     # Define your commands in a single bash call
     command = f"""
     cd {llama_factory_pth} &&
-    export {const_configs['CUDA_INFO']} &&
+    export CUDA_VISIBLE_DEVICES={const_configs['CUDA_INFO']} &&
     llamafactory-cli train ../qwen2vl_lora_sft_geoqa.yaml
     """
     
@@ -161,7 +161,8 @@ def do_infer(py_pth: str, base_model: str, lora_path: str, **kwargs):
 def do_merge_data(cur_iter:int, config, d_type, save_dir, original_file, prefix):
     if config['select_scaling']:
         merge_data_py = os.path.join(config["data_utils_dir"], 'geoqa', 'merge_data_select.py')
-    merge_data_py = os.path.join(config["data_utils_dir"], 'geoqa', 'merge_data.py')
+    else:
+        merge_data_py = os.path.join(config["data_utils_dir"], 'geoqa', 'merge_data.py')
 
     command = [
         'python', merge_data_py,
@@ -212,7 +213,7 @@ def add_info_and_save(cur_iter_name, const_configs, mode='sampling_eval'):
     for pred_file in preds_files:
         pred_file = os.path.join('outputs', pred_file)
         data_type = "train" if "train" in pred_file else "test"
-        if 'select' in pred_file:
+        if 'test_select' in pred_file:
             # self-select file have different id and needed to process
             add_info(os.path.join(const_configs["geoqa_data_dir"], f"{data_type}.jsonl"), pred_file, is_select=True)
         else:
@@ -233,14 +234,14 @@ def add_info_and_save(cur_iter_name, const_configs, mode='sampling_eval'):
     
     # gen_new train_data 
     iter_name = cur_iter_name.split('-')[-1]
-    do_gen_new_data(iter_name, const_configs, prefix)
+    do_gen_new_data(iter_name, const_configs, prefix+'-select-scaling')
     
 
 def args_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--base_model', type=str, default='Qwen2-VL-7B-Instruct')
     parser.add_argument('--geoqa_dir', type=str, default='geoQA-data')
-    parser.add_argument('--total_iters', type=int, default=3)
+    # parser.add_argument('--total_iters', type=int, default=3)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--ckpt_dir', type=str, default='Qwen2-VL-7B-Instruct')
     parser.add_argument('--max_select_num', type=int, default=6)
@@ -257,7 +258,7 @@ def args_parser():
         
     const_configs['base_model_path'] = args.base_model 
     const_configs['geoqa_data_dir'] = args.geoqa_dir
-    const_configs['select_scaling'] = 'True'
+    const_configs['select_scaling'] = True
     const_configs['max_select_num'] = args.max_select_num
     
     return args
@@ -265,35 +266,40 @@ def args_parser():
 
 if __name__ == '__main__':
     
-    ckpt_dir_pattern = "Qwen2-VL-geoqa-select-scaling{}"
+    ckpt_dir_pattern = "Qwen2-VL-geoqa-{}"
     args = args_parser()
 
-    iter_num = int(args.ckpt_dir.split('iter')[-1])
+    match = re.search(r'iter(\d+)', args.ckpt_dir)
+    iter_num = int(match.group(1))
     cur_iter = f'iter{iter_num}'
     ckpt_dir = ckpt_dir_pattern.format(cur_iter)
     # prefix_name = f"{ckpt_dir}"
     
     logging.info(f"==== Start Self-Select Scaling ====")
-    logging.info(f"Base on ckpt : {args.lora_path}")
-
-    # Do data sampling
-    logging.info(f"Start training sampling for select scaling, times : {args.total_iters}")
-    sampling_config = {
-        "iter_times": args.max_select_num,
-        "with_sampling": True,
-        "batch_size": args.batch_size,
-        "data_file": None,
-        "save_name": None
-    }
-    # train data sampling for next iteration, with COT prompt
-    sampling_config['data_file'] = os.path.join(const_configs['data_file_pth'],'geoqa_train_cot.json')
-    sampling_config['save_name'] = ckpt_dir_pattern.format(f'{ckpt_dir}_train_sample')
-    do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=args.lora_path, 
-             **sampling_config)
-    # Add info required for evaluation and generate the new train data
+    logging.info(f"Base on ckpt : {args.ckpt_dir}")
+    
     add_info_and_save(cur_iter_name=ckpt_dir, const_configs=const_configs)
+
+    # # Do data sampling
+    # logging.info(f"Start training sampling for select scaling")
+    # sampling_config = {
+    #     "iter_times": args.max_select_num,
+    #     "with_sampling": True,
+    #     "batch_size": args.batch_size,
+    #     "data_file": None,
+    #     "save_name": None
+    # }
+    # # train data sampling for next iteration, with COT prompt
+    # sampling_config['data_file'] = os.path.join(const_configs['data_file_pth'],'geoqa_train_cot.json')
+    # sampling_config['save_name'] = ckpt_dir_pattern.format(f'{cur_iter}_train_sample')
+    # # do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=args.ckpt_dir, 
+    # #          **sampling_config)
+    # # Add info required for evaluation and generate the new train data
+
+    # exit()
     
     cur_iter = f'iter{iter_num+1}'
+    ckpt_dir_pattern = "Qwen2-VL-geoqa-select-scaling-{}"
     ckpt_dir = ckpt_dir_pattern.format(cur_iter)
 
     # SFT with lora

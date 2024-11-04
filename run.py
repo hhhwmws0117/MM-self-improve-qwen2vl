@@ -116,7 +116,7 @@ def do_train(iter_name:str,
     # Define your commands in a single bash call
     command = f"""
     cd {llama_factory_pth} &&
-    export {const_configs['CUDA_INFO']} &&
+    export CUDA_VISIBLE_DEVICES={const_configs['CUDA_INFO']} &&
     llamafactory-cli train ../qwen2vl_lora_sft_geoqa.yaml
     """
     
