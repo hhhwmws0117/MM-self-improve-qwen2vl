@@ -6,8 +6,10 @@
 ## Introduction
 
 This project contains the code for our paper *Vision-Language Models Can Self-Improve Reasoning via Reflection.* 
-We present a novel approach for self-improving vision-language models through reflection, which involves training a model to generate explanations for its own predictions and then fine-tuning it based on these explanations. Our method, MM-self-Improve, achieves significant improvements in reasoning tasks. 
-We shows the least open-resourced model, Qwen2-VL, can gain significant improvements with our method, and achieves great test-time computation efficiency comparison with majority vote method.
+
+We introduce a new method called MM-Self-Improve for enhancing reasoning ability for vision-language models. This approach focuses on learning from mistakes to improve performance.
+
+Our latest open-source model, Qwen2-VL, benefits significantly from this method, showing improved results in multimodal reasoning tasks. Additionally, it offers greater efficiency during test-time compared to traditional majority voting methods.
 
 The code is based on the 🤗 [Qwen2-VL-7B-Instruct](https://huggingface.co/Qwen/Qwen2-VL-7B-Instruct) and [LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory?tab=readme-ov-file) for fine-tuning model. 
 You could find the train guide in [Qwen2-VL repository](https://github.com/QwenLM/Qwen2-VL?tab=readme-ov-file#training).
@@ -34,7 +36,7 @@ The following results illustrate the effectiveness of our self-training framewor
 
 ![Test-time selection vs. majority vote](assests/scale_qwen2.png)
 
-The test-time selection method showcases superior scalability, with a performance boost to 57.96 through majority voting and self-selection sampling.
+The test-time selection method showcases superior scalability, with a performance boost to 70.23 through majority voting and self-selection sampling.
 
 
 ## Quickstart

@@ -230,6 +230,7 @@ def add_info_and_save(cur_iter_name, const_configs, mode='sampling_eval'):
     iter_name = cur_iter_name.split('-')[-1]
     do_gen_new_data(iter_name, const_configs, prefix)
     
+
 def args_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--base_model', type=str, default='Qwen2-VL-7B-Instruct')
@@ -249,12 +250,9 @@ def args_parser():
         
     const_configs['base_model_path'] = args.base_model 
     const_configs['geoqa_data_dir'] = args.geoqa_dir
-
-    config_path = "qwen2vl_lora_sft_geoqa.yaml"  # Update this path
-    update_training_config(config_path, "", 'saves')
     
     return args
-    
+
 
 if __name__ == '__main__':
     
@@ -343,4 +341,4 @@ if __name__ == '__main__':
         logging.info(f"Test@1: {eval_res}")
         eval_res = eval_file(os.path.join(const_configs['geoqa_data_dir'], 'test.jsonl'), self_select_file)
         logging.info(f"Self-select: {eval_res}")
-        
+ 
