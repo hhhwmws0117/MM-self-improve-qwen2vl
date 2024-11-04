@@ -14,7 +14,7 @@ logging_steps: 10
 lora_target: all
 lr_scheduler_type: constant_with_warmup
 max_length: 2048
-model_name_or_path: /home/nlper_data/liyt/Qwen2-VL-7B-Instruct
+model_name_or_path: Qwen2-VL-7B-Instruct
 num_train_epochs: 3.0
 output_dir: LLaMA-Factory/saves/Qwen2-VL-geoqa-iter2
 overwrite_cache: true

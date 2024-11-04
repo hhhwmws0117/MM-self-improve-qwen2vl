@@ -2,7 +2,7 @@
 trash
 LLaMA-Factory
 data/**/*.json
-outputs
+outputs/*.json
 LLaMA-Factory
 
 

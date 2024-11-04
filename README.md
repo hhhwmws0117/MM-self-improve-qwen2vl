@@ -82,6 +82,14 @@ const_configs = {
 }
 ```
 
+And set the path to Qwen2-VL base model correctly in training config `qwen2vl_lora_sft_geoqa.yaml` for llamafactory.
+
+```yaml
+...
+model_name_or_path: Qwen2-VL-7B-Instruct
+...
+```
+
 #### Test-time Selection
 
 
