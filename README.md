@@ -1,7 +1,7 @@
 
 
 
-# MM-self-Improve (Qwen2-VL)
+# MM-Self-Improve (Qwen2-VL)
 
 ## Introduction
 
