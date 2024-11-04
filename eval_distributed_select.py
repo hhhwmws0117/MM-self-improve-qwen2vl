@@ -17,12 +17,12 @@ def load_data(path):
 
     new_data = [] 
     for item in data:
-        text = item['messages'][0]['content'].replace('<image>', '')
-        image_pth = item['images'][0]
+        # text = item['messages'][0]['content'].replace('<image>', '')
+        # image_pth = item['images'][0]
 
-        # text = item['conversations'][0]['value']
-        # image_pth = os.path.join('/home/nfs03/liyt/vlm-cot/custom_data/geoQA-data/images', 
-        #                          item['image'])
+        text = item['conversations'][0]['value']
+        image_pth = os.path.join('/home/nfs03/liyt/vlm-cot/custom_data/geoQA-data/images', 
+                                 item['image'])
         new_data.append([
             {
                 "role": "user", 
@@ -73,15 +73,12 @@ if __name__ == '__main__':
     parser.add_argument('--with_sampling', type=bool, default=False, help='Use sampling (default: False)')
     parser.add_argument('--batch_size', type=int, default=2, help='Batch size (default: 2)')
     parser.add_argument('--data_file', type=str, required=True, help='Path to the data test file')
-    parser.add_argument('--save_name', type=str, required=True, help='Path to the data test file')
+    parser.add_argument('--save_name', type=str, required=True, help='tgt saving file pth')
 
     parser.add_argument('--lora_path', type=str, default=None, help='Path to the lora file')
     parser.add_argument('--base_model', type=str, default='Qwen2-VL-7B-Instruct', help='Base model name')
 
     args = parser.parse_args()
-
-    # # model_path = '/home/nlper_data/liyt/Qwen2-VL-7B-Instruct'
-    # lora_path = 'LLaMA-Factory/saves/sft-geoqa-iter4-scale-10-16bs/checkpoint-1215'
     
     # We recommend enabling flash_attention_2 for better acceleration and memory saving, especially in multi-image and video scenarios.
     model = Qwen2VLForConditionalGeneration.from_pretrained(
@@ -106,68 +103,65 @@ if __name__ == '__main__':
     if distributed_state.is_local_main_process:
         print('Model: ', args.base_model)
         print('Lora: ', None if not args.lora_path else args.lora_path)
-        if args.lora_path:
-            print('adapters ', model.active_adapters())
+        print('adapters ', model.active_adapters())
         print(model.generation_config)
     
     # load_data 
     # datas, raw_datas = load_data(os.path.join('data', args.data_file))
     datas, raw_datas = load_data(args.data_file)
+
     ds = DummyDataset(datas, raw_datas)
     dl = DataLoader(ds, batch_size=batch_size, shuffle=False, collate_fn=process_qwen2)
     dl = distributed_state.prepare(dl)
     
-    for iter_idx in range(0, iter_times):
-        if distributed_state.is_local_main_process:
-            print(f"infer on iter{iter_idx}")
-        model_predictions = []
-        probess_bar = tqdm.tqdm(total=len(dl), disable=not distributed_state.is_local_main_process)
+    model_predictions = []
+    probess_bar = tqdm.tqdm(total=len(dl), disable=not distributed_state.is_local_main_process)
 
-        with torch.inference_mode():
-            for batch in dl:
-                inputs, predictions = batch
-                inputs = inputs.to(distributed_state.device)
-                
-                # infer and save
-                gen_kwargs = {}
-                if with_sampling: 
-                    gen_kwargs.update({
-                        'do_sample': True,
-                        'top_k': 50,  # 选择 top_k 采样，可以调整 k 值
-                        'top_p': 0.95,  # 选择 nucleus 采样，可以调整 p 值
-                        'temperature': 0.9,  # 调整温度以控制生成文本的随机性
-                        'max_new_tokens': 200
-                    })
-                else:
-                    gen_kwargs.update({
-                        'do_sample': False,
-                        'top_k': 50,  # 选择 top_k 采样，可以调整 k 值
-                        'temperature': 1,  # 调整温度以控制生成文本的随机性
-                        'max_new_tokens': 200
-                    })
-                generated_ids = model.generate(**inputs, **gen_kwargs)
-                generated_ids_trimmed = [
-                    out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-                ]
-                output_texts = processor.batch_decode(
-                    generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-                )
-                # make sure the outputs in order
-                output_texts = distributed_state.gather_for_metrics(output_texts)
-                predictions = distributed_state.gather_for_metrics(predictions)
-                
-                # save
-                for pred, output_text in zip(predictions, output_texts):
-                    pred.update({
-                        "prediction": output_text,
-                        "answer": pred['messages'][1]['content'],
-                        # "answer": pred['conversations'][1]['value'],
-                    })
-                    model_predictions.append(pred)
+    with torch.inference_mode():
+        for batch in dl:
+            inputs, predictions = batch
+            inputs = inputs.to(distributed_state.device)
+            
+            # infer and save
+            gen_kwargs = {}
+            if with_sampling: 
+                gen_kwargs.update({
+                    'do_sample': True,
+                    'top_k': 50,  # 选择 top_k 采样，可以调整 k 值
+                    'top_p': 0.95,  # 选择 nucleus 采样，可以调整 p 值
+                    'temperature': 0.9,  # 调整温度以控制生成文本的随机性
+                    'max_new_tokens': 200
+                })
+            else:
+                gen_kwargs.update({
+                    'do_sample': False,
+                    'top_k': 50,  # 选择 top_k 采样，可以调整 k 值
+                    'temperature': 1,  # 调整温度以控制生成文本的随机性
+                    'max_new_tokens': 200
+                })
+            generated_ids = model.generate(**inputs, **gen_kwargs)
+            generated_ids_trimmed = [
+                out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+            ]
+            output_texts = processor.batch_decode(
+                generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )
+            # make sure the outputs in order
+            output_texts = distributed_state.gather_for_metrics(output_texts)
+            predictions = distributed_state.gather_for_metrics(predictions)
+            
+            # save
+            for pred, output_text in zip(predictions, output_texts):
+                pred.update({
+                    "prediction": output_text,
+                    # "answer": pred['messages'][1]['content'],
+                    "answer": pred['conversations'][1]['value'],
+                })
+                model_predictions.append(pred)
     
-        
-                probess_bar.update(1)
+    
+            probess_bar.update(1)
 
-        local_output_path = os.path.join('outputs', f'{args.save_name}_{iter_idx}.json')
+        local_output_path = os.path.join('outputs', f'{args.save_name}.json')
         with open(local_output_path, 'w') as fw:
             json.dump(model_predictions, fw, ensure_ascii=False, indent=2)

@@ -1,6 +1,8 @@
 trash
 LLaMA-Factory
 data/**/*.json
+outputs
+LLaMA-Factory
 
 
 # Byte-compiled / optimized / DLL files

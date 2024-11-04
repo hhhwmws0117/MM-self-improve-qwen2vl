@@ -4,7 +4,7 @@ import json
 import random
 import argparse
 
-def formate_as_sharegpt(items):
+def formate_as_sharegpt(items, img_dir):
     new_data = [] 
     for item in items:
         messages = []
@@ -14,7 +14,7 @@ def formate_as_sharegpt(items):
         messages.append({"role": "user", "content": input_text})
         messages.append({"role": "assistant", "content": item['conversations'][1]['value']})
 
-        img_dir = '/AIRvePFS/ai4science/users/chengkz/geoQA-data/images' 
+        # img_dir = '/AIRvePFS/ai4science/users/chengkz/geoQA-data/images' 
         # abs_img_pth = os.path.join('/home/nfs03/liyt/vlm-cot/custom_data/geoQA-data/images', item['image'])
         abs_img_pth = os.path.join(img_dir, item['image'])
         
@@ -28,7 +28,8 @@ def formate_as_sharegpt(items):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate new data')
     parser.add_argument('--iter_num', type=str, required=True)
-    # parser.add_argument('--model_name', type=str)
+    parser.add_argument('--prefix', type=str)
+    parser.add_argument('--geoqa_dir', type=str)
     args = parser.parse_args()
     
     iter_num = args.iter_num
@@ -41,8 +42,9 @@ if __name__ == '__main__':
     #     model_prefix = 'qwen-ep3'
     # else:
     #     raise ValueError(f'{args.model_name} not in llava or qwen')
-    eval_pth = '/home/nfs03/liyt/Qwen2_VL_run/data/geoqa'
-    model_prefix = 'qwen2-geoqa-iter3-scale-10'
+    eval_pth = 'data/geoqa'
+    # model_prefix = 'qwen2-geoqa-iter3-scale
+    model_prefix = args.prefix
 
 
 
@@ -63,7 +65,7 @@ if __name__ == '__main__':
     new_data = []
     for item in train_qa_data: 
         image = os.path.basename(item['images'][0])
-        remote_image = os.path.join('/AIRvePFS/ai4science/users/chengkz/geoQA-data/images', image)
+        remote_image = os.path.join(args.geoqa_dir, 'images',image)
         item.update({
             "images": [remote_image]
         })
@@ -84,9 +86,9 @@ if __name__ == '__main__':
         select_data = json.load(fr)
     
     # convert to shareGPT format
-    cot_data = formate_as_sharegpt(cot_data)
-    refine_data = formate_as_sharegpt(refine_data)
-    select_data = formate_as_sharegpt(select_data)
+    cot_data = formate_as_sharegpt(cot_data, os.path.join(args.geoqa_dir, 'images'))
+    refine_data = formate_as_sharegpt(refine_data, os.path.join(args.geoqa_dir, 'images'))
+    select_data = formate_as_sharegpt(select_data, os.path.join(args.geoqa_dir, 'images'))
         
     new_data = []
     # do metric 
@@ -144,6 +146,6 @@ if __name__ == '__main__':
 
     random.shuffle(origin_train_data_copy) 
 
-    with open(os.path.join(f'{eval_pth}', f"geoQA_train_{model_prefix}_{iter_num}.json"), 'w') as fw: 
+    with open(os.path.join(f'{eval_pth}', f"{model_prefix}_{iter_num}.json"), 'w') as fw: 
         json.dump(origin_train_data_copy, fw, indent=4, ensure_ascii=False)
             

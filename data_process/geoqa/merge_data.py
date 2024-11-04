@@ -5,9 +5,6 @@ import re
 import collections
 import argparse
 
-# from vlrlhf.eval.m3cot.calculate import judge_answer
-# from calculate import judge_answer
-
 llava15_inst = '\nAnswer the question using a single word or phrase.'
 llava_qa_inst = '\nAnswer with the option’s letter from the given choices directly.'
 
@@ -92,20 +89,6 @@ def is_expected_format(text, choices, answer):
                 if len(res) >= 1:
                     return True
     return False
-
-# def stf_format(question:str, options:list, ans:str, cot=True) -> list:
-#     user_prompt = "[Question]\n{question} \n[Choices]\n{choices}\n"
-#     user_prompt = user_prompt.format(question=question, choices='\n'.join(options))
-#     if cot:
-#         task_prompt = "Answer the question with the letter of the best option from given choices. \nFirstly, explain the reasoning process step by step, then output the best option."
-#     else:
-#         task_prompt = "Answer the question with the letter of the best option from given choices."
-#     user_prompt = user_prompt + task_prompt + llava_qa_inst
-    
-#     conversations.append({"from": "user", "value": user_prompt})
-#     conversations.append({"from": "assistant", "value": ans})
-
-#     return conversations
 
 def gen_question(question: str, choices:list, cot=True) -> str:
     
@@ -373,17 +356,18 @@ def gen_select_data(merge_datas:list, merge_correct:list, origin_data:list, orde
         # print(len(ordered_neg_ids), len(ordered_pos_ids))
 
         # # filterd or non cot
-        # ordered_pos_ids = [file_order for file_order in ordered_pos_ids 
-        #                    if len(merge_datas[file_order][i]['prediction']) > 50]
-        # ordered_neg_ids = [file_order for file_order in ordered_neg_ids
-        #                    if len(merge_datas[file_order][i]['prediction']) > 50]
-        # ordered_pos_ids = [file_order for file_order in ordered_pos_ids 
-        #                    if not merge_datas[file_order][i]['prediction'].startswith('Answer')]
-        # ordered_neg_ids = [file_order for file_order in ordered_neg_ids
-        #                    if not merge_datas[file_order][i]['prediction'].startswith('Answer')]
-        
-        # if len(ordered_neg_ids) == 0 or len(ordered_pos_ids) == 0:
-        #     continue
+        if data_type == 'train':
+            ordered_pos_ids = [file_order for file_order in ordered_pos_ids 
+                               if len(merge_datas[file_order][i]['prediction']) > 50]
+            ordered_neg_ids = [file_order for file_order in ordered_neg_ids
+                               if len(merge_datas[file_order][i]['prediction']) > 50]
+            ordered_pos_ids = [file_order for file_order in ordered_pos_ids 
+                               if not merge_datas[file_order][i]['prediction'].startswith('Answer')]
+            ordered_neg_ids = [file_order for file_order in ordered_neg_ids
+                               if not merge_datas[file_order][i]['prediction'].startswith('Answer')]
+            
+            if len(ordered_neg_ids) == 0 or len(ordered_pos_ids) == 0:
+                continue
         
         def gen_s_item():
             select_type = '2pos1neg' if len(pos_ids) > 1 else '1pos2neg'
@@ -539,6 +523,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, help='eval saving dir')
     parser.add_argument('--sample_prefix', type=str, help='experiment name')
     parser.add_argument('--save_dir', type=str, help='new data saving dir')
+    parser.add_argument('--original_file', type=str, help='original data file path')
 
     args = parser.parse_args()
     
@@ -547,83 +532,23 @@ if __name__ == '__main__':
     
     eval_pth = args.save_dir
     expr_name = args.sample_prefix
-    
-    # if 'llava' in args.model_name:
-    #     eval_pth = 'geoQA'
-    #     model_prefix = 'llava1_5-ep4'
-    # elif 'qwen' in args.model_name:
-    #     eval_pth = 'geoQA_qwen'
-    #     model_prefix = 'qwen-ep3'
-    # else:
-    #     raise ValueError(f'{args.model_name} not in llava or qwen')
+    origin_file = args.original_file
 
-
-    origin_file = f'/home/nfs03/liyt/vlm-cot/custom_data/geoQA-data/{data_type}.jsonl'
+    # origin_file = f'/home/nfs03/liyt/vlm-cot/custom_data/geoQA-data/{data_type}.jsonl'
     merge_files = []
     if data_type == 'train':
         merge_files = [
-            f'{expr_name}_iter{iter_num}_train_sample{i}.json'
-            for i in range(1, 4) for iter_num in range(cur_iter+1)
+            f'outputs/{expr_name}-iter{iter_num}_train_sample_{i}_added.json'
+            for i in range(3) for iter_num in range(cur_iter+1)
         ]
     elif data_type == 'test':
         merge_files = [
-            f'{expr_name}_iter{cur_iter}_test_sample{i}.json'
-            for i in range(1, 4)
+            f'outputs/{expr_name}-iter{cur_iter}_test_sample_{i}_added.json'
+            for i in range(3)
         ]
     else:
         raise ValueError(f'{data_type} if not in [train, test]')
-    # merge_files = [
-    #     '/home/nfs03/liyt/VL-RLHF/GeoQA_llava1_5-ep4_iter0_Rationales_train_sample1_a6000-1.json',
-    #     '/home/nfs03/liyt/VL-RLHF/GeoQA_llava1_5-ep4_iter0_Rationales_train_sample2_a6000-1.json',
-    #     '/home/nfs03/liyt/VL-RLHF/GeoQA_llava1_5-ep4_iter0_Rationales_train_sample3_a6000-1.json',
-    #     '/home/nfs03/liyt/VL-RLHF/GeoQA_llava1_5-ep4_iter1_Rationales_train_sample1_a6000-1.json',
-    #     '/home/nfs03/liyt/VL-RLHF/GeoQA_llava1_5-ep4_iter1_Rationales_train_sample2_a6000-1.json',
-    #     '/home/nfs03/liyt/VL-RLHF/GeoQA_llava1_5-ep4_iter1_Rationales_train_sample3_a6000-1.json',
-    # ]
-    # merge_files = [
-    #     '3090-Qwen2-geoqa_iter0_train_sample0_added.json',
-    #     '3090-Qwen2-geoqa_iter0_train_sample1_added.json',
-    #     '3090-Qwen2-geoqa_iter0_train_sample2_added.json',
-    #     'Qwen2-geoqa_iter1_train_sample0_added.json',
-    #     'Qwen2-geoqa_iter1_train_sample0_added.json',
-    #     'Qwen2-geoqa_iter1_train_sample0_added.json',
-    #     'Qwen2-geoqa_iter2_train_sample0_added.json',
-    #     'Qwen2-geoqa_iter2_train_sample1_added.json',
-    #     'Qwen2-geoqa_iter2_train_sample2_added.json',
-    #     'Qwen2-geoqa_iter3_train_sample0_added.json',
-    #     'Qwen2-geoqa_iter3_train_sample1_added.json',
-    #     'Qwen2-geoqa_iter3_train_sample2_added.json',
-    # ]
-    merge_files = [
-        # 'trash/scale_gen/Qwen2-geoqa_iter4_ep3_scale_test_sample0_added.json',
-        # 'trash/scale_gen/Qwen2-geoqa_iter4_ep3_scale_test_sample1_added.json',
-        # 'trash/scale_gen/Qwen2-geoqa_iter4_ep3_scale_test_sample2_added.json',
-        # 'trash/scale_gen/Qwen2-geoqa_iter4_ep3_scale_test_sample3_added.json',
-        # 'trash/scale_gen/Qwen2-geoqa_iter4_ep3_scale_test_sample4_added.json',
-        # 'trash/scale_gen/Qwen2-geoqa_iter4_ep3_scale_test_sample5_added.json',
-        # 'trash/scale_gen/Qwen2-geoqa_iter4_ep3_scale_test_sample6_added.json',
-        # 'trash/scale_gen/Qwen2-geoqa_iter4_ep3_scale_test_sample7_added.json',
-        # 'trash/scale_gen/Qwen2-geoqa_iter4_ep3_scale_test_sample8_added.json',
-        # 'trash/scale_gen/Qwen2-geoqa_iter4_ep3_scale_test_sample9_added.json',
-        
-        'Qwen2-geoqa_iter4_cot_n3_test_sample0_added.json',
-        'Qwen2-geoqa_iter4_cot_n3_test_sample1_added.json',
-        'Qwen2-geoqa_iter4_cot_n3_test_sample2_added.json',
-        'Qwen2-geoqa_iter4_cot_n3_test_sample3_added.json',
-        'Qwen2-geoqa_iter4_cot_n3_test_sample4_added.json',
-        'Qwen2-geoqa_iter4_cot_n3_test_sample5_added.json',
-        'Qwen2-geoqa_iter4_cot_n3_test_sample6_added.json',
-        'Qwen2-geoqa_iter4_cot_n3_test_sample7_added.json',
-        'Qwen2-geoqa_iter4_cot_n3_test_sample8_added.json',
-        'Qwen2-geoqa_iter4_cot_n3_test_sample9_added.json',
-        # 'Qwen2-geoqa_iter4_test_n3_sample0_added.json',
-        # 'Qwen2-geoqa_iter4_test_n3_sample1_added.json',
-        # 'Qwen2-geoqa_iter4_test_n3_sample2_added.json',
-        
-        # 'Qwen2-geoqa_iter4_cot_n3_test_sample1_added.json',
-        # 'Qwen2-geoqa_iter4_cot_n3_test_sample5_added.json',
-        # 'Qwen2-geoqa_iter4_cot_n3_test_sample8_added.json',
-    ]
+
     merge_datas = [json.load(open(f, 'r')) for f in merge_files]
     if not check_data_id_match(merge_datas):
         raise ValueError('The id not match per file')
@@ -642,16 +567,7 @@ if __name__ == '__main__':
     # filtered_origin_data = [origin_data[i] for i in remining_ids]
     # merge_datas = filtered_merge_datas
     # origin_data = filtered_origin_data
-    # calculate the metric
-    # test most corrct
-    # m_cor = 0
-    # for i in range(len(files_corrects[0])):
-    #     cur_corrects = [cor[i] for cor in files_corrects]
-    #     if cur_corrects.count(True)/len(files_corrects) > 0.5:
-    #         m_cor += 1
-    # print("=easy vote=\n{}, cor:{}, total:{}".format(
-    #    m_cor/len(files_corrects[0]), m_cor, len(files_corrects[0])
-    # ))
+
     # test@M vote
     m_vote_metric = calculate_Mvote(merge_datas, origin_data)
     print("="*10, "M vote", "="*10)
@@ -664,17 +580,17 @@ if __name__ == '__main__':
     print(file_order)
     
     cot_data, refine_data, select_data = [], [], []
-    # # build cot data
-    # cot_data = gen_cot_data(merge_data=merge_datas, merge_corrects=files_corrects, origin_data=origin_data, order_list=file_order)
-    # print('='*20)
-    # print("Generate cot data: ",  len(cot_data))
-    # print(cot_data[0])
+    # build cot data
+    cot_data = gen_cot_data(merge_data=merge_datas, merge_corrects=files_corrects, origin_data=origin_data, order_list=file_order)
+    print('='*20)
+    print("Generate cot data: ",  len(cot_data))
+    print(cot_data[0])
     
-    # # build refine data
-    # refine_data = gen_refine_data(merge_datas=merge_datas, merge_correct=files_corrects, origin_data=origin_data, order_list=file_order)
-    # print('='*20)
-    # print('Generated New refine data: {}'.format(len(refine_data)))
-    # print(refine_data[0])
+    # build refine data
+    refine_data = gen_refine_data(merge_datas=merge_datas, merge_correct=files_corrects, origin_data=origin_data, order_list=file_order)
+    print('='*20)
+    print('Generated New refine data: {}'.format(len(refine_data)))
+    print(refine_data[0])
     
     # build select data
     select_data, select_metric = gen_select_data(merge_datas=merge_datas, merge_correct=files_corrects, origin_data=origin_data, order_list=file_order, data_type=data_type)
@@ -685,7 +601,7 @@ if __name__ == '__main__':
 
     # # build n select data 
     # select_data, select_metric = gen_select_data_n(merge_datas=merge_datas, merge_correct=files_corrects, origin_data=origin_data, order_list=file_order, data_type=data_type,
-    #                                                 n_candidates=[9])
+    #                                                 n_candidates=[2,3,4,5,6])
     # print('='*20)
     # print('Generated Select data:')
     # print(select_metric)
@@ -693,9 +609,9 @@ if __name__ == '__main__':
     
     output_dir = f'data/{eval_pth}/self_{data_type}_data'
     iter_num = f'iter{cur_iter}'
-    cot_out_file = f"{expr_name}_{iter_num}_cot.json"
-    refine_out_file = f'{expr_name}_{iter_num}_refine.json'
-    select_out_file = f'{expr_name}_{iter_num}_select.json'
+    cot_out_file = f"{expr_name}-{iter_num}_cot.json"
+    refine_out_file = f'{expr_name}-{iter_num}_refine.json'
+    select_out_file = f'{expr_name}-{iter_num}_select.json'
 
     with open(os.path.join(output_dir, cot_out_file), 'w') as fw:
         json.dump(cot_data, fw, indent=4, ensure_ascii=False)

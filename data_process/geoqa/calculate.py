@@ -136,6 +136,27 @@ def extract_select_preds(text, split_token='Prediction'):
     parts = text.split(split_token)[1:]
     parts[-1] = '\n'.join(parts[-1].split('\n')[:-1])
     return parts
+
+def eval_file(original_test_data, model_preds, by_type='all'):
+    pred_file = model_preds 
+    cot_test_file =  original_test_data
+    test_data = []
+    with open(cot_test_file, 'r') as fr:
+        test_data = json.load(fr)
+    with open(pred_file, 'r') as fr:
+        model_preds = json.load(fr)
+
+    eval_res = []
+    print(os.path.basename(pred_file))
+    data_splited = gen_data_split(test_data, model_preds, by_type=by_type)
+    for key, preds in data_splited.items():
+        metric = calculate_metrics(preds)
+        print('=='*10, key, '=='*10)
+        print("Acc: {}, with Total:{}, and corrected {}".format((metric['correct']/metric['total']),
+                                                                 metric['total'],
+                                                                 metric['correct']))
+        eval_res.append(metric)
+    return eval_res
     
 if __name__ == '__main__':
     pred_file = 'Qwen2-geoqa_iter4gen_scale10_test_10_select0_added.json'

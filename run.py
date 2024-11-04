@@ -1,0 +1,316 @@
+import os
+import json
+import subprocess
+import re
+import logging
+import shutil
+import yaml
+
+from data_process.geoqa.add_test_info import add_info
+from data_process.geoqa.calculate import eval_file
+
+const_configs = {
+    "model_name": 'qwen2-vl',
+    # "ckpt_path": 'saves',
+    "base_model_path": '/home/nlper_data/liyt/Qwen2-VL-7B-Instruct',
+    "dataset": 'geoqa',
+    "data_file_pth": 'data',
+    "data_utils_dir": 'data_process',
+    "geoqa_data_dir": '/home/nfs03/liyt/vlm-cot/custom_data/geoQA-data' 
+}
+
+# Configure the logging
+logging.basicConfig(
+    filename=f'self-train-{const_configs["model_name"]}.log',  # Specify the file to log to
+    filemode='a',        # 'a' means append to the file (use 'w' to overwrite)
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO  # Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+)
+
+
+def update_training_config(config_path: str, dataset_name: str, ckpt_dir: str):
+    global const_configs
+    # Load the YAML configuration file
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Update dataset and output_dir in the configuration
+    config['dataset'] = dataset_name  # e.g., 'geoqa'
+    config['output_dir'] = ckpt_dir   # e.g., 'saves/qwen2_vl-7b/sft-geoqa'
+    config['model_name_or_path'] = const_configs['base_model_path'] 
+
+    
+    # Optionally, add more fields here if needed
+    # config['template'] = 'qwen2_vl'  # Ensure consistency with template if needed
+    
+    # Save the modified configuration back to the YAML file
+    with open(config_path, 'w') as f:
+        yaml.dump(config, f)
+    
+    print(f"Updated training configuration at {config_path} with dataset {dataset_name} and output directory {ckpt_dir}.")
+
+
+def do_train(iter_name:str,
+             prefix: str,
+             ckpt_dir:str,
+             llama_factory_pth:str='LLaMA-Factory'):
+    # inject the data and corresponding config for llama-factory requirement
+    global const_configs
+    train_data_name = f"{prefix}_iter{int(iter_name[-1])-1}"
+    tgt_train_file = os.path.join(const_configs['data_file_pth'], 'geoqa', f"{train_data_name}.json")
+    llama_factory_data_dir = os.path.join(llama_factory_pth, 'data')
+    llama_factory_data_config = os.path.join(llama_factory_pth, 'data', 'dataset_info.json')
+    new_data_config = {f"{train_data_name}": {
+            "file_name": f"{train_data_name}.json",
+            "formatting": "sharegpt",
+            "columns": {
+                "messages": "messages",
+                "images": "images"
+            },
+            "tags": {
+            "role_tag": "role",
+            "content_tag": "content",
+            "user_tag": "user",
+            "assistant_tag": "assistant"
+            }
+        }
+    }
+        # Copy the data file to llama_factory data directory
+    try:
+        shutil.copy(tgt_train_file, llama_factory_data_dir)
+        print(f"Copied {tgt_train_file} to {llama_factory_data_dir}.")
+    except FileNotFoundError:
+        print(f"Training data file not found: {tgt_train_file}")
+        return
+    except Exception as e:
+        print(f"An error occurred while copying the file: {e}")
+        return
+
+    # Update the data_info.json configuration file
+    try:
+        # Load existing config data
+        if os.path.exists(llama_factory_data_config):
+            with open(llama_factory_data_config, 'r') as f:
+                data_info = json.load(f)
+        else:
+            data_info = {}
+        
+        # Add new data configuration
+        data_info.update(new_data_config)
+
+        # Save the updated config
+        with open(llama_factory_data_config, 'w') as f:
+            json.dump(data_info, f, indent=4)
+        print(f"Updated data_info.json with new configuration for {prefix}-{iter_name}.")
+    except Exception as e:
+        print(f"An error occurred while updating data_info.json: {e}")
+    
+
+    config_path = "qwen2vl_lora_sft_geoqa.yaml"  # Update this path
+    dataset_name = f"{train_data_name}"  # Must match `data_info.json`
+    ckpt_dir = os.path.join(llama_factory_pth, 'saves', ckpt_dir)
+    update_training_config(config_path, dataset_name, ckpt_dir)
+
+    # Define your commands in a single bash call
+    command = f"""
+    cd {llama_factory_pth} &&
+    export CUDA_VISIBLE_DEVICES=0,1 &&
+    llamafactory-cli train ../qwen2vl_lora_sft_geoqa.yaml
+    """
+    
+    print("Executing command:", command)
+    
+    try:
+        # Execute the entire command sequence in a single bash session
+        subprocess.run(command, shell=True, check=True, executable="/bin/bash")
+        print("Bash script executed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while executing bash script: {e}")
+    except FileNotFoundError:
+        print("Bash script not found or not executable.")
+
+def do_infer(py_pth: str, base_model: str, lora_path: str, **kwargs):
+    # Build the command as a single string
+    command = (
+        f"accelerate launch --config_file accelerate_config.json --num_processes 2 {py_pth} "
+        f"--base_model {base_model} "
+    )
+    if lora_path:
+        command += f"--lora_path {lora_path} "
+
+    for k, v in kwargs.items():
+        command += f"--{k} {v} "
+
+    print(command)
+
+    try:
+        # Use shell=True to run the command as a single shell command
+        subprocess.run(command, check=True, shell=True)
+        print("Bash script executed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while executing bash script: {e}")
+        exit()
+    except FileNotFoundError:
+        print("Bash script not found or not executable.")
+        exit()
+
+def do_merge_data(cur_iter:int, config, d_type, save_dir, original_file, prefix):
+    merge_data_py = os.path.join(config["data_utils_dir"], 'geoqa', 'merge_data.py')
+
+    command = [
+        'python', merge_data_py,
+        f'--d_type={d_type}',
+        f'--iter_num={cur_iter}',
+        f'--sample_prefix={prefix}',
+        f'--save_dir=geoqa',
+        f'--original_file={original_file}'
+    ]
+    print(command)
+
+    try:
+        # 使用subprocess运行Bash脚本
+        subprocess.run(command, check=True)
+        print("Bash script executed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while executing bash script: {e}")
+    except FileNotFoundError:
+        print("Bash script not found or not executable.")
+
+def do_gen_new_data(cur_iter_name, config, prefix):
+    gen_data_py = os.path.join(config['data_file_pth'], 'geoqa', 'new_data_gen.py')
+    command = [
+        'python', gen_data_py,
+        f'--iter_num={cur_iter_name}',
+        f'--prefix={prefix}',
+        f'--geoqa_dir={config["geoqa_data_dir"]}'
+    ]
+    print(command)
+
+    try:
+        # 使用subprocess运行Bash脚本
+        subprocess.run(command, check=True)
+        print("Bash script executed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while executing bash script: {e}")
+    except FileNotFoundError:
+        print("Bash script not found or not executable.")
+
+def add_info_and_save(cur_iter_name, const_configs, mode='sampling_eval'):
+    # add infor
+    preds_files = os.listdir('outputs')
+    preds_files = [f for f in preds_files if f.startswith(cur_iter_name) and f.endswith('json') and 'added' not in f]
+    
+    for pred_file in preds_files:
+        pred_file = os.path.join('outputs', pred_file)
+        data_type = "train" if "train" in pred_file else "test"
+        if 'select' in pred_file:
+            # self-select file have different id and needed to process
+            add_info(os.path.join(const_configs["geoqa_data_dir"], f"{data_type}.jsonl"), pred_file, is_select=True)
+        else:
+            add_info(os.path.join(const_configs["geoqa_data_dir"], f"{data_type}.jsonl"), pred_file)
+        
+    if mode == 'test_eval':
+        return
+
+    # merge_data 
+    prefix = '-'.join(cur_iter_name.split('-')[:-1])
+    cur_iter_num = int(cur_iter_name[-1])
+    d_types = ['train', 'test']
+    if cur_iter_num == 0:
+        d_types = ['train']
+    for d_type in d_types:
+        do_merge_data(cur_iter_num, const_configs, d_type, 'geoqa', 
+                      os.path.join(const_configs['geoqa_data_dir'], f"{d_type}.jsonl"), prefix) 
+    
+    # gen_new train_data 
+    iter_name = cur_iter_name.split('-')[-1]
+    do_gen_new_data(iter_name, const_configs, prefix)
+    
+
+if __name__ == '__main__':
+    
+    ckpt_dir_pattern = "Qwen2-VL-geoqa-{}"
+    
+    # The total number of iterations
+    for iter_num in range(2, 3):
+        cur_iter = f'iter{iter_num}'
+        ckpt_dir = ckpt_dir_pattern.format(cur_iter)
+        
+        logging.info(f"==== Start iteration {cur_iter} ====")
+
+        if iter_num == 0:
+            # for iter0 we need to sample and generate the train data 
+            logging.info(f"Start training data sampling for {cur_iter}")
+            sampling_config = {
+                "iter_times": 3,
+                "with_sampling": True,
+                "batch_size": 2,
+                "data_file": None,
+                "save_name": None
+            }
+            # train data sampling for next iteration, with COT prompt
+            sampling_config['data_file'] = os.path.join(const_configs['data_file_pth'],'geoqa_train_cot.json')
+            sampling_config['save_name'] = ckpt_dir_pattern.format(f'{cur_iter}_train_sample')
+            # do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=None, **sampling_config)
+            add_info_and_save(cur_iter_name=ckpt_dir, const_configs=const_configs)
+            # exit()
+            continue
+        
+        # SFT with lora
+        logging.info(f"Start SFT with lora for {cur_iter}")
+        logging.info(f"The checkpoint dir is LLaMA-Factory/saves/{ckpt_dir}")
+        do_train(iter_name=cur_iter, prefix=ckpt_dir[:-6], ckpt_dir=ckpt_dir)
+        
+        
+        # Do data sampling
+        logging.info(f"Start training data sampling for {cur_iter}")
+        sampling_config = {
+            "iter_times": 3,
+            "with_sampling": True,
+            "batch_size": 12,
+            "data_file": None,
+            "save_name": None
+        }
+        # train data sampling for next iteration, with COT prompt
+        sampling_config['data_file'] = os.path.join(const_configs['data_file_pth'],'geoqa_train_cot.json')
+        sampling_config['save_name'] = ckpt_dir_pattern.format(f'{cur_iter}_train_sample')
+        do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=os.path.join('LLaMA-Factory/saves', ckpt_dir), 
+                 **sampling_config)
+        # test data sampling for next iteration, with COT prompt
+        logging.info(f"Start test data sampling for {cur_iter}")
+        sampling_config['data_file'] = os.path.join(const_configs['data_file_pth'],'geoqa_test_cot.json')
+        sampling_config['save_name'] = ckpt_dir_pattern.format(f'{cur_iter}_test_sample')
+        do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=os.path.join('LLaMA-Factory/saves', ckpt_dir), **sampling_config)
+        
+        # Add info required for evaluation and generate the new train data
+        add_info_and_save(cur_iter_name=ckpt_dir, const_configs=const_configs)
+        
+        infer_config = {
+            "iter_times": 1,
+            "with_sampling": False,
+            "batch_size": 12,
+            "data_file": None,
+            "save_name": None
+        }
+        # Test time computation
+        logging.info(f"Start test time computation for {cur_iter}")
+        infer_config['data_file'] = os.path.join(const_configs['data_file_pth'], const_configs['dataset'], 'self_test_data',
+                                                 ckpt_dir_pattern.format(f'{cur_iter}_select.json'))
+        infer_config['save_name'] = ckpt_dir_pattern.format(f'{cur_iter}_test_select')
+        do_infer(py_pth='eval_distributed_select.py', base_model=const_configs['base_model_path'], lora_path=os.path.join('LLaMA-Factory/saves', ckpt_dir), **infer_config)
+        # Test@1
+        logging.info(f"Start test for {cur_iter}")
+        infer_config['data_file'] = os.path.join(const_configs['data_file_pth'], 'geoqa_test_cot.json')
+        infer_config['save_name'] = ckpt_dir_pattern.format(f'{cur_iter}_test_cot')
+        do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=os.path.join('LLaMA-Factory/saves', ckpt_dir), **infer_config)
+
+        # Evaluation
+        add_info_and_save(cur_iter_name=ckpt_dir, const_configs=const_configs)
+        test_file = os.path.join('outputs', f"{ckpt_dir}_test_cot_0_added.json")
+        self_select_file = os.path.join('outputs', f"{ckpt_dir}_test_select_added.json")
+        logging.info(f"Start evaluation for {cur_iter}")
+        eval_res = eval_file(os.path.join(const_configs['geoqa_data_dir'], 'test.jsonl'), test_file)
+        logging.info(f"Test@1: {eval_res}")
+        eval_res = eval_file(os.path.join(const_configs['geoqa_data_dir'], 'test.jsonl'), self_select_file)
+        logging.info(f"Self-select: {eval_res}")
+        
