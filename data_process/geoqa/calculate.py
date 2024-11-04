@@ -161,7 +161,7 @@ def eval_file(original_test_data, model_preds, by_type='all'):
 if __name__ == '__main__':
     pred_file = 'Qwen2-geoqa_iter4gen_scale10_test_10_select0_added.json'
     
-    cot_test_file = '/home/nfs03/liyt/vlm-cot/custom_data/geoQA-data/test.jsonl'
+    cot_test_file = 'geoQA-data/test.jsonl'
     test_data = []
     with open(cot_test_file, 'r') as fr:
         test_data = json.load(fr)

@@ -548,6 +548,10 @@ if __name__ == '__main__':
         ]
     else:
         raise ValueError(f'{data_type} if not in [train, test]')
+    
+    # merge_files = [
+    #     # Sampled training samples or test samples path
+    # ]
 
     merge_datas = [json.load(open(f, 'r')) for f in merge_files]
     if not check_data_id_match(merge_datas):
@@ -599,7 +603,8 @@ if __name__ == '__main__':
     print(select_metric)
     print(select_data[0])
 
-    # # build n select data 
+    # ! For build mixed self-select training samples
+    # # build n select data
     # select_data, select_metric = gen_select_data_n(merge_datas=merge_datas, merge_correct=files_corrects, origin_data=origin_data, order_list=file_order, data_type=data_type,
     #                                                 n_candidates=[2,3,4,5,6])
     # print('='*20)

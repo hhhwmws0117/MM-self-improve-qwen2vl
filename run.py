@@ -12,11 +12,12 @@ from data_process.geoqa.calculate import eval_file
 const_configs = {
     "model_name": 'qwen2-vl',
     # "ckpt_path": 'saves',
-    "base_model_path": '/home/nlper_data/liyt/Qwen2-VL-7B-Instruct',
+    "base_model_path": 'Qwen2-VL-7B-Instruct', # ABS path to model checkpoint
     "dataset": 'geoqa',
     "data_file_pth": 'data',
     "data_utils_dir": 'data_process',
-    "geoqa_data_dir": '/home/nfs03/liyt/vlm-cot/custom_data/geoQA-data' 
+    "geoqa_data_dir": 'geoQA-data', # ABS path to processed geoQA data
+    "CUDA_INFO": 'CUDA_VISIBLE_DEVICES=0,1,2,3'
 }
 
 # Configure the logging
@@ -108,13 +109,13 @@ def do_train(iter_name:str,
 
     config_path = "qwen2vl_lora_sft_geoqa.yaml"  # Update this path
     dataset_name = f"{train_data_name}"  # Must match `data_info.json`
-    ckpt_dir = os.path.join(llama_factory_pth, 'saves', ckpt_dir)
+    ckpt_dir = os.path.join('saves', ckpt_dir)
     update_training_config(config_path, dataset_name, ckpt_dir)
 
     # Define your commands in a single bash call
     command = f"""
     cd {llama_factory_pth} &&
-    export CUDA_VISIBLE_DEVICES=0,1 &&
+    export {const_configs['CUDA_INFO']} &&
     llamafactory-cli train ../qwen2vl_lora_sft_geoqa.yaml
     """
     
@@ -130,9 +131,11 @@ def do_train(iter_name:str,
         print("Bash script not found or not executable.")
 
 def do_infer(py_pth: str, base_model: str, lora_path: str, **kwargs):
+    global const_configs
+    cuda_num = const_configs['CUDA_INFO'].count(',') + 1
     # Build the command as a single string
     command = (
-        f"accelerate launch --config_file accelerate_config.json --num_processes 2 {py_pth} "
+        f"accelerate launch --config_file accelerate_config.json --num_processes {cuda_num} {py_pth} "
         f"--base_model {base_model} "
     )
     if lora_path:
@@ -232,7 +235,7 @@ if __name__ == '__main__':
     ckpt_dir_pattern = "Qwen2-VL-geoqa-{}"
     
     # The total number of iterations
-    for iter_num in range(2, 3):
+    for iter_num in range(0, 3):
         cur_iter = f'iter{iter_num}'
         ckpt_dir = ckpt_dir_pattern.format(cur_iter)
         
@@ -251,7 +254,7 @@ if __name__ == '__main__':
             # train data sampling for next iteration, with COT prompt
             sampling_config['data_file'] = os.path.join(const_configs['data_file_pth'],'geoqa_train_cot.json')
             sampling_config['save_name'] = ckpt_dir_pattern.format(f'{cur_iter}_train_sample')
-            # do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=None, **sampling_config)
+            do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=None, **sampling_config)
             add_info_and_save(cur_iter_name=ckpt_dir, const_configs=const_configs)
             # exit()
             continue
