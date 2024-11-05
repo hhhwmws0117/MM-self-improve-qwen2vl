@@ -340,6 +340,7 @@ def gen_select_data_n(merge_datas: list, merge_correct: list, origin_data: list,
 def gen_select_data(merge_datas:list, merge_correct:list, origin_data:list, order_list, data_type) -> tuple:
     
     total_length = len(merge_datas[0])
+    # print(total_length)
     
     select_data = []
     metric = {'2pos1neg': 0, '1pos2neg': 0, 'total': 0}
@@ -351,6 +352,7 @@ def gen_select_data(merge_datas:list, merge_correct:list, origin_data:list, orde
             # model do the same judge, no data to refine
                 continue
         
+        # breakpoint()
         ordered_pos_ids = [file_order for file_order in order_list if file_order in pos_ids]
         ordered_neg_ids = [file_order for file_order in order_list if file_order in neg_ids]
         # print(len(ordered_neg_ids), len(ordered_pos_ids))
@@ -536,17 +538,35 @@ if __name__ == '__main__':
     origin_file = args.original_file
 
     # origin_file = f'/home/nfs03/liyt/vlm-cot/custom_data/geoQA-data/{data_type}.jsonl'
+
+    outputs_files = os.listdir('outputs')
+    outputs_files = [f for f in outputs_files if f.endswith('.json')]
     merge_files = []
     if data_type == 'train':
-        merge_files = [
-            f'outputs/{expr_name}-iter{iter_num}_train_sample_{i}_added.json'
-            for i in range(3) for iter_num in range(cur_iter+1)
-        ]
+        for f in outputs_files:
+            pattern = re.compile(rf'{expr_name}-iter(\d+)_train_sample_(\d+)_added\.json')
+            # code here
+            match = pattern.match(f)
+            if match:
+                iter_num = int(match.group(1))
+                sample_num = int(match.group(2))
+                if iter_num <= cur_iter:  # Make sure it's within the current iterations
+                    merge_files.append(f'outputs/{f}')
     elif data_type == 'test':
-        merge_files = [
-            f'outputs/{expr_name}-iter{cur_iter}_test_sample_{i}_added.json'
-            for i in range(3)
-        ]
+        for f in outputs_files:
+            pattern = re.compile(rf'{expr_name}-iter(\d+)_test_sample_(\d+)_added\.json')
+            # code here
+            match = pattern.match(f)
+            if match:
+                iter_num = int(match.group(1))
+                sample_num = int(match.group(2))
+                if iter_num == cur_iter:  # Make sure it's within the current iterations
+                    merge_files.append(f'outputs/{f}')
+
+        # merge_files = [
+        #     f'outputs/{expr_name}-iter{cur_iter}_test_sample_{i}_added.json'
+        #     for i in range(3)
+        # ]
     else:
         raise ValueError(f'{data_type} if not in [train, test]')
     
@@ -614,7 +634,8 @@ if __name__ == '__main__':
         with open(os.path.join(output_dir, select_out_file), 'w') as fw:
             json.dump(select_data, fw, indent=4, ensure_ascii=False)
     elif data_type == 'test':
-        for n in range(2, args.max_select_num):
+        print(args.max_select_num)
+        for n in range(2, args.max_select_num+1):
             cnt = 0
             n_merge_datas = []
             n_files_corrects = []
@@ -624,7 +645,7 @@ if __name__ == '__main__':
                     break
                 n_merge_datas.append(merge_datas[f_ord])
                 n_files_corrects.append(files_corrects[f_ord])
-                file_order.append(cnt)
+                n_file_order.append(cnt)
                 cnt += 1 
             # build select data
             select_data, select_metric = gen_select_data(merge_datas=n_merge_datas, merge_correct=n_files_corrects, origin_data=origin_data, 
@@ -638,5 +659,6 @@ if __name__ == '__main__':
             #     json.dump(cot_data, fw, indent=4, ensure_ascii=False)
             # with open(os.path.join(output_dir, refine_out_file), 'w') as fw:
             #     json.dump(refine_data, fw, indent=4, ensure_ascii=False)
+            select_out_file = f'{expr_name}-{iter_num}_select_n{n}.json'
             with open(os.path.join(output_dir, select_out_file), 'w') as fw:
                 json.dump(select_data, fw, indent=4, ensure_ascii=False)
