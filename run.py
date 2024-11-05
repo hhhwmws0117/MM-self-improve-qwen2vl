@@ -18,7 +18,7 @@ const_configs = {
     "data_file_pth": 'data',
     "data_utils_dir": 'data_process',
     "geoqa_data_dir": 'geoQA-data', # ABS path to processed geoQA data
-    "CUDA_INFO": 'CUDA_VISIBLE_DEVICES=0,1,2,3'
+    "CUDA_INFO": '0,1,2,3'
 }
 
 # Configure the logging
