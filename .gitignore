@@ -1,9 +1,7 @@
 .DS_Store
 trash
-LLaMA-Factory
 data/**/*.json
 outputs/*.json
-LLaMA-Factory
 
 
 # Byte-compiled / optimized / DLL files
