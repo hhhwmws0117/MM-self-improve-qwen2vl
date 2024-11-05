@@ -48,9 +48,9 @@ if __name__ == '__main__':
 
 
 
-    cot_file = f'{eval_pth}/self_train_data/{model_prefix}_{iter_num}_cot.json'
-    refine_file = f'{eval_pth}/self_train_data/{model_prefix}_{iter_num}_refine.json'
-    select_file = f'{eval_pth}/self_train_data/{model_prefix}_{iter_num}_select.json'
+    cot_file = f'{eval_pth}/self_train_data/{model_prefix}-{iter_num}_cot.json'
+    refine_file = f'{eval_pth}/self_train_data/{model_prefix}-{iter_num}_refine.json'
+    select_file = f'{eval_pth}/self_train_data/{model_prefix}-{iter_num}_select.json'
 
     train_qa_file = 'data/geoqa_train_base.json'
     # train_rationales_file = '/home/nfs03/liyt/vlm-cot/custom_data/geoQA-data/geoqa_sft_train_536-rationale_noInstruct_new.json'
