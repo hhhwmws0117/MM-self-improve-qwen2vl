@@ -1,6 +1,12 @@
 .DS_Store
 trash
 data/**/*.json
+!data/geoqa_test_base.json
+!data/geoqa_test_cot.json
+!data/geoqa_train_base.json
+!data/geoqa_train_cot.json
+!data/geoqa_train_sample.json
+
 outputs/*.json
 
 
