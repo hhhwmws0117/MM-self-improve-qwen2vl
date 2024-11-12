@@ -160,7 +160,7 @@ def eval_file(original_test_data, model_preds, by_type='all'):
     return eval_res
     
 if __name__ == '__main__':
-    pred_file = 'Qwen2-geoqa_iter4gen_scale10_test_10_select0_added.json'
+    pred_file = 'Qwen2-VL-geoqa-iter2_test_cot_0_added.json'
     
     cot_test_file = 'geoQA-data/test.jsonl'
     test_data = []

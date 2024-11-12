@@ -18,7 +18,8 @@ const_configs = {
     "data_file_pth": 'data',
     "data_utils_dir": 'data_process',
     "geoqa_data_dir": 'geoQA-data', # ABS path to processed geoQA data
-    "CUDA_INFO": '0,1,2,3'
+    "CUDA_INFO": '0,1,2,3',
+    "train_batch_size": 2
 }
 
 # Configure the logging
@@ -41,6 +42,15 @@ def update_training_config(config_path: str, dataset_name: str, ckpt_dir: str):
     config['output_dir'] = ckpt_dir   # e.g., 'saves/qwen2_vl-7b/sft-geoqa'
     config['model_name_or_path'] = const_configs['base_model_path'] 
 
+    default_bs = 64 
+    cuda_num = const_configs['CUDA_INFO'].count(',')+1
+    gradient_cumulated_step = int(default_bs / cuda_num / const_configs['train_batch_size'])
+    
+    config['gradient_accumulation_steps'] = gradient_cumulated_step
+    config['per_device_train_batch_size'] = 2
+    
+
+    logging.info(f"Train ckpt with 64 global batch_size on {cuda_num} GPUs, per device with BS: {const_configs['train_batch_size']}")
     
     # Optionally, add more fields here if needed
     # config['template'] = 'qwen2_vl'  # Ensure consistency with template if needed
@@ -49,7 +59,7 @@ def update_training_config(config_path: str, dataset_name: str, ckpt_dir: str):
     with open(config_path, 'w') as f:
         yaml.dump(config, f)
     
-    print(f"Updated training configuration at {config_path} with dataset {dataset_name} and output directory {ckpt_dir}.")
+    logging.info(f"Updated training configuration at {config_path} with dataset {dataset_name} and output directory {ckpt_dir}.")
 
 
 def do_train(iter_name:str,
@@ -80,12 +90,12 @@ def do_train(iter_name:str,
         # Copy the data file to llama_factory data directory
     try:
         shutil.copy(tgt_train_file, llama_factory_data_dir)
-        print(f"Copied {tgt_train_file} to {llama_factory_data_dir}.")
+        logging.info(f"Copied {tgt_train_file} to {llama_factory_data_dir}.")
     except FileNotFoundError:
-        print(f"Training data file not found: {tgt_train_file}")
+        logging.info(f"Training data file not found: {tgt_train_file}")
         return
     except Exception as e:
-        print(f"An error occurred while copying the file: {e}")
+        logging.info(f"An error occurred while copying the file: {e}")
         return
 
     # Update the data_info.json configuration file
@@ -103,9 +113,9 @@ def do_train(iter_name:str,
         # Save the updated config
         with open(llama_factory_data_config, 'w') as f:
             json.dump(data_info, f, indent=4)
-        print(f"Updated data_info.json with new configuration for {prefix}-{iter_name}.")
+        logging.info(f"Updated data_info.json with new configuration for {prefix}-{iter_name}.")
     except Exception as e:
-        print(f"An error occurred while updating data_info.json: {e}")
+        logging.info(f"An error occurred while updating data_info.json: {e}")
     
 
     config_path = "qwen2vl_lora_sft_geoqa.yaml"  # Update this path
@@ -120,16 +130,16 @@ def do_train(iter_name:str,
     llamafactory-cli train ../qwen2vl_lora_sft_geoqa.yaml
     """
     
-    print("Executing command:", command)
+    logging.info(f"Executing command: {command}")
     
     try:
         # Execute the entire command sequence in a single bash session
         subprocess.run(command, shell=True, check=True, executable="/bin/bash")
-        print("Bash script executed successfully.")
+        logging.info("Bash script executed successfully.")
     except subprocess.CalledProcessError as e:
-        print(f"Error occurred while executing bash script: {e}")
+        logging.info(f"Error occurred while executing bash script: {e}")
     except FileNotFoundError:
-        print("Bash script not found or not executable.")
+        logging.info("Bash script not found or not executable.")
 
 def do_infer(py_pth: str, base_model: str, lora_path: str, **kwargs):
     global const_configs
@@ -145,17 +155,17 @@ def do_infer(py_pth: str, base_model: str, lora_path: str, **kwargs):
     for k, v in kwargs.items():
         command += f"--{k} {v} "
 
-    print(command)
+    logging.info(command)
 
     try:
         # Use shell=True to run the command as a single shell command
         subprocess.run(command, check=True, shell=True)
-        print("Bash script executed successfully.")
+        logging.info("Bash script executed successfully.")
     except subprocess.CalledProcessError as e:
-        print(f"Error occurred while executing bash script: {e}")
+        logging.info(f"Error occurred while executing bash script: {e}")
         exit()
     except FileNotFoundError:
-        print("Bash script not found or not executable.")
+        logging.info("Bash script not found or not executable.")
         exit()
 
 def do_merge_data(cur_iter:int, config, d_type, save_dir, original_file, prefix):
@@ -169,16 +179,16 @@ def do_merge_data(cur_iter:int, config, d_type, save_dir, original_file, prefix)
         f'--save_dir=geoqa',
         f'--original_file={original_file}'
     ]
-    print(command)
+    logging.info(command)
 
     try:
         # 使用subprocess运行Bash脚本
         subprocess.run(command, check=True)
-        print("Bash script executed successfully.")
+        logging.info("Bash script executed successfully.")
     except subprocess.CalledProcessError as e:
-        print(f"Error occurred while executing bash script: {e}")
+        logging.info(f"Error occurred while executing bash script: {e}")
     except FileNotFoundError:
-        print("Bash script not found or not executable.")
+        logging.info("Bash script not found or not executable.")
 
 def do_gen_new_data(cur_iter_name, config, prefix):
     gen_data_py = os.path.join(config['data_file_pth'], 'geoqa', 'new_data_gen.py')
@@ -188,16 +198,16 @@ def do_gen_new_data(cur_iter_name, config, prefix):
         f'--prefix={prefix}',
         f'--geoqa_dir={config["geoqa_data_dir"]}'
     ]
-    print(command)
+    logging.info(command)
 
     try:
         # 使用subprocess运行Bash脚本
         subprocess.run(command, check=True)
-        print("Bash script executed successfully.")
+        logging.info("Bash script executed successfully.")
     except subprocess.CalledProcessError as e:
-        print(f"Error occurred while executing bash script: {e}")
+        logging.info(f"Error occurred while executing bash script: {e}")
     except FileNotFoundError:
-        print("Bash script not found or not executable.")
+        logging.info("Bash script not found or not executable.")
 
 def add_info_and_save(cur_iter_name, const_configs, mode='sampling_eval'):
     # add infor
@@ -262,7 +272,7 @@ if __name__ == '__main__':
     args = args_parser()
     
     # The total number of iterations
-    for iter_num in range(0, args.total_iters):
+    for iter_num in range(3, args.total_iters+1):
         cur_iter = f'iter{iter_num}'
         ckpt_dir = ckpt_dir_pattern.format(cur_iter)
         
@@ -279,9 +289,9 @@ if __name__ == '__main__':
                 "save_name": None
             }
             # train data sampling for next iteration, with COT prompt
-            sampling_config['data_file'] = os.path.join(const_configs['data_file_pth'],'geoqa_train_cot.json')
+            sampling_config['data_file'] = os.path.join(const_configs['data_file_pth'],'geoqa_train_sample.json')
             sampling_config['save_name'] = ckpt_dir_pattern.format(f'{cur_iter}_train_sample')
-            do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=None, **sampling_config)
+            # do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=None, **sampling_config)
             add_info_and_save(cur_iter_name=ckpt_dir, const_configs=const_configs)
             # exit()
             continue
@@ -343,4 +353,6 @@ if __name__ == '__main__':
         logging.info(f"Test@1: {eval_res}")
         eval_res = eval_file(os.path.join(const_configs['geoqa_data_dir'], 'test.jsonl'), self_select_file)
         logging.info(f"Self-select: {eval_res}")
+        
+        exit()
         

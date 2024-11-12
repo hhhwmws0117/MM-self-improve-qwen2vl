@@ -18,7 +18,8 @@ const_configs = {
     "data_file_pth": 'data',
     "data_utils_dir": 'data_process',
     "geoqa_data_dir": 'geoQA-data', # ABS path to processed geoQA data
-    "CUDA_INFO": 'CUDA_VISIBLE_DEVICES=0,1,2,3'
+    "CUDA_INFO": 'CUDA_VISIBLE_DEVICES=0,1,2,3',
+    "train_batch_size": 2
 }
 
 # Configure the logging
@@ -40,6 +41,17 @@ def update_training_config(config_path: str, dataset_name: str, ckpt_dir: str):
     config['dataset'] = dataset_name  # e.g., 'geoqa'
     config['output_dir'] = ckpt_dir   # e.g., 'saves/qwen2_vl-7b/sft-geoqa'
     config['model_name_or_path'] = const_configs['base_model_path'] 
+    
+    default_bs = 64 
+    cuda_num = const_configs['CUDA_INFO'].count(',')+1
+    gradient_cumulated_step = int(default_bs / cuda_num / const_configs['train_batch_size'])
+    
+    config['gradient_accumulation_steps'] = gradient_cumulated_step
+    config['per_device_train_batch_size'] = 2
+    
+
+    logging.info(f"Train ckpt with 64 global batch_size on {cuda_num} GPUs, per device with BS: {const_configs['train_batch_size']}")
+
 
     
     # Optionally, add more fields here if needed
