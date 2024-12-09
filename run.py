@@ -272,7 +272,7 @@ if __name__ == '__main__':
     args = args_parser()
     
     # The total number of iterations
-    for iter_num in range(3, args.total_iters+1):
+    for iter_num in range(0, args.total_iters+1):
         cur_iter = f'iter{iter_num}'
         ckpt_dir = ckpt_dir_pattern.format(cur_iter)
         
