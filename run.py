@@ -291,9 +291,10 @@ if __name__ == '__main__':
             # train data sampling for next iteration, with COT prompt
             sampling_config['data_file'] = os.path.join(const_configs['data_file_pth'],'geoqa_train_sample.json')
             sampling_config['save_name'] = ckpt_dir_pattern.format(f'{cur_iter}_train_sample')
-            # do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=None, **sampling_config)
+            do_infer(py_pth='eval_distributed.py', base_model=const_configs['base_model_path'], lora_path=None, **sampling_config)
             add_info_and_save(cur_iter_name=ckpt_dir, const_configs=const_configs)
-            # exit()
+
+            # For iter0, we just sample files for self-training from base model, no need to do SFT 
             continue
         
         # SFT with lora
@@ -354,5 +355,4 @@ if __name__ == '__main__':
         eval_res = eval_file(os.path.join(const_configs['geoqa_data_dir'], 'test.jsonl'), self_select_file)
         logging.info(f"Self-select: {eval_res}")
         
-        exit()
         
